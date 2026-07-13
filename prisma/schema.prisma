@@ -39,6 +39,17 @@ enum AuditOutcome {
   PENDING
 }
 
+enum ApprovalAction {
+  APPROVE
+  REJECT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  VETOED
+}
+
 model User {
   id        String   @id
   name      String
@@ -58,18 +69,19 @@ model Customer {
 }
 
 model Transaction {
-  id            String            @id
-  customerId    String
-  customer      Customer          @relation(fields: [customerId], references: [id])
-  merchant      String
-  amountMinor   Int
-  currency      String
-  paymentMethod String
-  riskLevel     RiskLevel
-  flagReason    String
-  status        TransactionStatus @default(FLAGGED)
-  createdAt     DateTime
-  updatedAt     DateTime          @updatedAt
+  id               String            @id
+  customerId       String
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  merchant         String
+  amountMinor      Int
+  currency         String
+  paymentMethod    String
+  riskLevel        RiskLevel
+  flagReason       String
+  status           TransactionStatus @default(FLAGGED)
+  createdAt        DateTime
+  updatedAt        DateTime          @updatedAt
+  approvalRequests ApprovalRequest[]
 
   @@index([status, riskLevel])
   @@index([customerId])
@@ -93,4 +105,27 @@ model AuditEvent {
   @@index([createdAt])
   @@index([resourceType, resourceId])
   @@index([actorId])
+}
+
+model ApprovalRequest {
+  id                   String            @id
+  transactionId        String
+  transaction          Transaction       @relation(fields: [transactionId], references: [id])
+  requestedAction      ApprovalAction
+  requestedTargetState TransactionStatus
+  requestedById        String
+  requestedByName      String
+  requestedByRole      Role
+  requestReason        String
+  status               ApprovalStatus    @default(PENDING)
+  activeTransactionId  String?           @unique
+  reviewedById         String?
+  reviewedByName       String?
+  reviewedByRole       Role?
+  reviewReason         String?
+  createdAt            DateTime          @default(now())
+  reviewedAt           DateTime?
+
+  @@index([transactionId, status])
+  @@index([status, createdAt])
 }

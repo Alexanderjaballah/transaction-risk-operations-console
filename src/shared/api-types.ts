@@ -29,6 +29,13 @@ export interface TransactionSummary {
     accountStatus: string;
     maskedAccountReference: string;
   };
+  pendingApprovalRequest: {
+    id: string;
+    status: "PENDING";
+    requestedAction: "APPROVE" | "REJECT";
+    requestedTargetState: TransactionStatus;
+    createdAt: string;
+  } | null;
 }
 
 export interface AuditEvent {
@@ -44,4 +51,24 @@ export interface AuditEvent {
   reason: string | null;
   outcome: "SUCCESS" | "DENIED" | "PENDING";
   createdAt: string;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  transactionId: string;
+  requestedAction: "APPROVE" | "REJECT";
+  requestedTargetState: TransactionStatus;
+  requestedById: string;
+  requestedByName: string;
+  requestedByRole: Role;
+  requestReason: string;
+  status: "PENDING" | "APPROVED" | "VETOED";
+  activeTransactionId: string | null;
+  reviewedById: string | null;
+  reviewedByName: string | null;
+  reviewedByRole: Role | null;
+  reviewReason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  transaction: Omit<TransactionSummary, "pendingApprovalRequest">;
 }

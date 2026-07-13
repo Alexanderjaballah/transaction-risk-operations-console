@@ -5,6 +5,28 @@ import { prisma } from "@/server/db";
 
 describe("deterministic synthetic seed data", () => {
   it("meets the queue, threshold, risk, currency, and demo-record invariants", async () => {
+    await expect(
+      prisma.user.findMany({
+        orderBy: { id: "asc" },
+        select: { id: true, name: true, role: true },
+      }),
+    ).resolves.toEqual([
+      {
+        id: "USR-2026-0001",
+        name: "Sam Support",
+        role: "SUPPORT",
+      },
+      {
+        id: "USR-2026-0002",
+        name: "Olivia Operations",
+        role: "OPERATIONS",
+      },
+      {
+        id: "USR-2026-0003",
+        name: "Aaron Approver",
+        role: "APPROVER",
+      },
+    ]);
     expect(await prisma.transaction.count()).toBe(200);
     expect(
       await prisma.transaction.count({

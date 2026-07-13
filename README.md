@@ -4,6 +4,8 @@ A focused proof of concept for reviewing suspicious synthetic financial
 transactions. The application demonstrates server-controlled demo identity,
 database-backed authorization, explicit transaction-state transitions,
 mandatory decision justification, and an append-only prototype audit trail.
+High-value Approve and Reject decisions use a maker-checker control so one
+Operations user requests the change and an Approver completes or vetoes it.
 
 This is not a Retool clone, a low-code platform, a real payment system, or a
 production authentication implementation.
@@ -29,7 +31,7 @@ Requirements:
 - npm
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run db:generate
 npx prisma migrate dev
@@ -64,17 +66,17 @@ and sets an HttpOnly cookie. Every protected request reads that cookie and
 loads the current user and role from the database. Roles supplied in request
 JSON, query parameters, or headers do not grant permissions.
 
-| Role | View queue/detail | Decide | View complete audit trail |
-|---|---:|---:|---:|
-| Support | Yes | No | No |
-| Operations | Yes | Yes | No |
-| Approver | Yes | No in this session | Yes |
+| Role | View queue/detail | Direct decide | Create high-value request | View/complete pending approvals | View complete audit trail |
+|---|---:|---:|---:|---:|---:|
+| Support | Yes | No | No | No | No |
+| Operations | Yes | Yes, when eligible | Yes | No | No |
+| Approver | Yes | No | No | Yes | Yes |
 
 The three seeded identities are:
 
 - Sam Support (`SUPPORT`)
 - Olivia Operations (`OPERATIONS`)
-- Avery Approver (`APPROVER`)
+- Aaron Approver (`APPROVER`)
 
 ## Demo walkthrough
 
@@ -84,20 +86,30 @@ records remain unchanged whenever the database is reseeded:
 | Record | ID | Seed state | Purpose |
 |---|---|---|---|
 | A | `TRX-2026-000041` | `FLAGGED`, $684.25 | Use as Operations for a successful direct decision |
-| B | `TRX-2026-000042` | `FLAGGED`, $1,867.50 | Leave unresolved for the later maker-checker session |
+| B | `TRX-2026-000042` | `FLAGGED`, $1,867.50 | Maker-checker approval demonstration |
 | C | `TRX-2026-000043` | `APPROVED` | Demonstrate safe rejection of repeated/invalid transitions |
 
 Suggested flow:
 
-1. Select Sam Support and search for `TRX-2026-000041`.
-2. Open the transaction and confirm that account data is masked and decision
-   controls are unavailable.
-3. Select Olivia Operations, return to record A, enter a written reason, choose
-   Approve, and confirm the decision.
-4. Open record C to see a terminal transaction. Server tests prove that further
-   decisions return a safe conflict even if a request bypasses the UI.
-5. Select Avery Approver and open the complete audit trail.
-6. Run `npm run db:seed` to restore the stable demonstration state.
+1. Run `npm run db:seed` to restore the stable unresolved state.
+2. Select Olivia Operations and open `TRX-2026-000042`.
+3. Choose Reject, enter a request reason, and confirm. The response is
+   `PENDING_APPROVAL`; the transaction remains `FLAGGED`.
+4. Open Pending approvals as Operations to see the authorization failure.
+   API tests also prove Operations cannot approve or veto.
+5. Select Aaron Approver, open Pending approvals, and review the request.
+6. Enter a mandatory checker reason, choose Approve request, and confirm.
+7. Verify the request is `APPROVED`, its active transaction ownership is
+   cleared, and `TRX-2026-000042` is `REJECTED`.
+8. Open the audit trail and verify the `PENDING` request event followed by the
+   `SUCCESS` completion event with actual persisted states.
+9. Server tests prove repeat completion is safely denied.
+10. Run `npm run db:seed` again and confirm record B returns to `FLAGGED`.
+
+For the Session 1 direct-decision flow, use Olivia Operations with
+`TRX-2026-000041`; its $684.25 amount remains eligible for a direct decision.
+Use Sam Support to verify masked account data and server-side decision denial,
+and record C to demonstrate terminal-state rejection.
 
 ## Transaction states
 
@@ -115,6 +127,35 @@ addition to these state rules.
 Repeated and alternate terminal-state decisions are rejected without changing
 the persisted state.
 
+## Maker-checker workflow
+
+The fixed high-value threshold is `100000` minor units ($1,000.00 USD):
+
+- `APPROVE` and `REJECT` at or below the threshold remain direct Operations
+  decisions.
+- `APPROVE` and `REJECT` above the threshold create a pending approval request
+  and leave the transaction `FLAGGED`.
+- `ESCALATE` remains direct regardless of amount.
+- While any request is `PENDING`, every further transaction decision,
+  including Escalate, is blocked to prevent a stale checker review.
+- Only `APPROVER` may approve or veto. The persisted requester user ID cannot
+  equal the current server-loaded user ID.
+
+`requestedAction` is the typed `ApprovalAction` enum (`APPROVE` or `REJECT`).
+The requested target state is derived on the server; browser-supplied target,
+status, requester, reviewer, actor, and role values are ignored.
+
+| Approval state | Approve | Veto |
+|---|---|---|
+| `PENDING` | `APPROVED`; transaction becomes requested target | `VETOED`; transaction stays `FLAGGED` |
+| `APPROVED` | Denied | Denied |
+| `VETOED` | Denied | Denied |
+
+`activeTransactionId` equals the transaction ID only while the request is
+`PENDING`. Approval or veto atomically changes the terminal request status and
+clears `activeTransactionId`, so a vetoed `FLAGGED` transaction can receive a
+later valid request.
+
 ## Decision request evaluation
 
 Protected decision requests are evaluated in this order:
@@ -130,8 +171,34 @@ Unauthorized users receive `403 DECISION_FORBIDDEN` before transaction lookup,
 so the response does not reveal whether a requested ID exists. Authorized
 requests for unknown IDs receive `404 TRANSACTION_NOT_FOUND`.
 
-For a successful decision, transaction update and audit creation happen in one
-Prisma transaction.
+For a successful direct decision, transaction update and audit creation happen
+in one Prisma transaction. The existing request body remains compatible.
+Successful responses add a backward-compatible discriminator:
+
+- `kind = "DECIDED"` for a direct decision.
+- `kind = "PENDING_APPROVAL"` for a high-value request.
+
+High-value request validation, request creation, and the `PENDING` audit event
+share the existing decision-service transaction; no nested Prisma transaction
+is opened.
+
+## Stable error codes
+
+| Code | Meaning |
+|---|---|
+| `DECISION_FORBIDDEN` | Current server-loaded role cannot decide |
+| `TRANSACTION_NOT_FOUND` | Authorized decision references an unknown transaction |
+| `DECISION_INVALID_PAYLOAD` | Decision action or payload is invalid |
+| `DECISION_REASON_REQUIRED` | Operations reason is empty |
+| `DECISION_INVALID_TRANSITION` | Transaction is terminal |
+| `APPROVAL_FORBIDDEN` | Current role cannot view or complete approvals |
+| `SELF_APPROVAL_FORBIDDEN` | Current user ID equals persisted requester ID |
+| `APPROVAL_NOT_FOUND` | Approval request does not exist |
+| `APPROVAL_ALREADY_PENDING` | Transaction already has an active request |
+| `APPROVAL_ALREADY_COMPLETED` | Request is already approved or vetoed |
+| `APPROVAL_INVALID_PAYLOAD` | Completion action or payload is invalid |
+| `REVIEW_REASON_REQUIRED` | Checker reason is empty |
+| `TRANSACTION_STATE_CONFLICT` | Pending ownership or transaction state conflicts |
 
 ## Audit behavior
 
@@ -150,8 +217,29 @@ state, reason, outcome, and timestamp.
 - Successful audit reads do not recursively create audit events.
 - Ordinary queue and detail reads are not audited in this prototype.
 
-The `AuditOutcome` enum includes `PENDING` for the later maker-checker session,
-but Session 1 does not create pending events.
+Maker-checker request creation records `PENDING` with `FLAGGED → FLAGGED`.
+Approval records `SUCCESS` with `FLAGGED → APPROVED` or
+`FLAGGED → REJECTED`. Veto records `SUCCESS` with `FLAGGED → FLAGGED`.
+Duplicate, forbidden, self-approval, repeated-completion, and state-conflict
+attempts record `DENIED` where the database remains available.
+
+## Concurrency and atomicity
+
+- SQLite serializes database writes.
+- Prisma provides the transaction boundary.
+- A nullable unique `activeTransactionId` is the final integrity guard against
+  two active requests; an in-transaction check provides the clear domain error.
+- Conditional `updateMany` operations provide compare-and-set behavior at the
+  application/database boundary.
+- Completion atomically changes `PENDING` to `APPROVED`/`VETOED`, clears
+  `activeTransactionId`, conditionally changes the `FLAGGED` transaction when
+  approved, and writes the success audit event.
+- The prototype demonstrates exactly-one completion under the tested SQLite
+  setup. It does not claim distributed or multi-database concurrency
+  guarantees.
+- A compare-and-set loser returns `APPROVAL_ALREADY_COMPLETED`. Its denied
+  event is written separately where possible so it cannot roll back the
+  winner; an unavailable database may prevent that secondary audit write.
 
 ## Synthetic seed guarantees
 
@@ -175,6 +263,21 @@ The test suite proves:
 - A valid Operations decision updates the transaction and creates the expected
   success event.
 - Repeated and terminal-state decisions are safely rejected.
+- High-value Approve/Reject create typed pending requests and preserve
+  `FLAGGED`; direct low-value decisions and eligible Escalate remain compatible.
+- Active ownership is set while pending, cleared on approval/veto, and permits
+  a later request after veto.
+- Support cannot create or view approval requests; Operations cannot complete
+  them.
+- Self-approval remains blocked after the requester's persisted role changes
+  to Approver because the control compares user IDs.
+- Approver approval applies the server-derived target; veto leaves the
+  transaction unchanged.
+- Duplicate requests, decisions while pending, and repeated completion are
+  denied and audited.
+- Two concurrent completion attempts produce exactly one success in SQLite.
+- Client-supplied approval actors, roles, statuses, and target states cannot
+  override server-derived values.
 - Authorized unknown-transaction decisions return the stable safe 404 contract
   and null-state audit.
 - Unauthorized decisions return the same safe 403 contract for existing and
@@ -192,6 +295,9 @@ The test suite proves:
   appropriate assurance mechanisms.
 - A production authorization model may require finer-grained entitlements,
   scoped assignments, and policy administration.
+- The maker-checker threshold is fixed in source for this focused prototype.
+  Production rules would normally be centrally managed, versioned, and tested
+  across products and jurisdictions.
 - Production escalation would normally route a transaction into a dedicated
   investigation or case-management queue rather than treating escalation as
   the end of the workflow. That queue is deliberately not built here.
@@ -204,5 +310,5 @@ The test suite proves:
   currency-aware thresholds or normalization into a common currency.
 - The audit trail is not described as immutable, tamper-resistant, compliant,
   or production ready.
-- Maker-checker approval, real payment execution, bank integrations,
-  production monitoring, and compliance certification are deferred.
+- Real payment execution, bank integrations, notifications, multi-level
+  approvals, production monitoring, and compliance certification are deferred.

@@ -15,3 +15,15 @@ export function canDecide(role: Role) {
 export function canViewAuditTrail(role: Role) {
   return role === Role.APPROVER;
 }
+
+export function canCreateApprovalRequest(role: Role) {
+  return role === Role.OPERATIONS;
+}
+
+export function canViewPendingApprovals(role: Role) {
+  return role === Role.APPROVER;
+}
+
+export function canCompleteApproval(role: Role) {
+  return role === Role.APPROVER;
+}

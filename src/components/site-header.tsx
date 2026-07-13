@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ApproverNavigation } from "@/components/approver-navigation";
 import { DemoIdentitySelector } from "@/components/demo-identity-selector";
 
 export function SiteHeader() {
@@ -16,6 +17,7 @@ export function SiteHeader() {
         </Link>
         <nav aria-label="Primary navigation">
           <Link href="/">Transaction queue</Link>
+          <ApproverNavigation />
           <Link href="/audit">Audit trail</Link>
         </nav>
       </div>
