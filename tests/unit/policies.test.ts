@@ -1,8 +1,11 @@
 import { Role } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import {
+  canCompleteApproval,
+  canCreateApprovalRequest,
   canDecide,
   canViewAuditTrail,
+  canViewPendingApprovals,
   canViewTransactions,
 } from "@/server/authorization/policies";
 
@@ -24,5 +27,20 @@ describe("role policies", () => {
     expect(canViewAuditTrail(Role.SUPPORT)).toBe(false);
     expect(canViewAuditTrail(Role.OPERATIONS)).toBe(false);
     expect(canViewAuditTrail(Role.APPROVER)).toBe(true);
+  });
+
+  it("only allows Operations to create approval requests", () => {
+    expect(canCreateApprovalRequest(Role.SUPPORT)).toBe(false);
+    expect(canCreateApprovalRequest(Role.OPERATIONS)).toBe(true);
+    expect(canCreateApprovalRequest(Role.APPROVER)).toBe(false);
+  });
+
+  it("only allows Approver to view and complete pending approvals", () => {
+    expect(canViewPendingApprovals(Role.SUPPORT)).toBe(false);
+    expect(canViewPendingApprovals(Role.OPERATIONS)).toBe(false);
+    expect(canViewPendingApprovals(Role.APPROVER)).toBe(true);
+    expect(canCompleteApproval(Role.SUPPORT)).toBe(false);
+    expect(canCompleteApproval(Role.OPERATIONS)).toBe(false);
+    expect(canCompleteApproval(Role.APPROVER)).toBe(true);
   });
 });

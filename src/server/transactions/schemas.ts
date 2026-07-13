@@ -14,6 +14,15 @@ export const decisionPayloadSchema = z.object({
   reason: z.string().max(1000).optional().default(""),
 });
 
+export const approvalCompletionSchema = z.object({
+  action: z.enum(["APPROVE", "VETO"]),
+  reason: z.string().max(1000).optional().default(""),
+});
+
+export type ApprovalCompletionAction = z.infer<
+  typeof approvalCompletionSchema
+>["action"];
+
 export const transactionQuerySchema = z.object({
   search: z.string().trim().max(100).optional().default(""),
   status: z.nativeEnum(TransactionStatus).optional(),

@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { readErrorMessage } from "@/shared/api";
 import type { DemoUser, TransactionSummary } from "@/shared/api-types";
 import { formatDateTime, formatMoney } from "@/shared/format";
+import { HIGH_VALUE_THRESHOLD_MINOR } from "@/shared/workflow";
 
 type DecisionAction = "APPROVE" | "REJECT" | "ESCALATE";
 
@@ -86,8 +87,15 @@ export function TransactionDetail({
       return;
     }
 
+    const data: {
+      kind: "DECIDED" | "PENDING_APPROVAL";
+      approvalRequest?: { id: string };
+    } = await response.json();
+
     setSuccess(
-      `${actionLabels[selectedAction]} decision recorded with an audit event.`,
+      data.kind === "PENDING_APPROVAL"
+        ? `${actionLabels[selectedAction]} request ${data.approvalRequest?.id} is pending checker review. The transaction remains FLAGGED.`
+        : `${actionLabels[selectedAction]} decision recorded with an audit event.`,
     );
     setReason("");
     setSelectedAction(null);
@@ -112,7 +120,12 @@ export function TransactionDetail({
   }
 
   const canDecide =
-    currentUser?.role === "OPERATIONS" && transaction.status === "FLAGGED";
+    currentUser?.role === "OPERATIONS" &&
+    transaction.status === "FLAGGED" &&
+    !transaction.pendingApprovalRequest;
+  const requiresApproval =
+    transaction.amountMinor > HIGH_VALUE_THRESHOLD_MINOR &&
+    selectedAction !== "ESCALATE";
 
   return (
     <section>
@@ -191,8 +204,20 @@ export function TransactionDetail({
               This transaction is terminal. Further decisions will be rejected
               by the server.
             </div>
+          ) : transaction.pendingApprovalRequest ? (
+            <div className="permission-note">
+              Approval request {transaction.pendingApprovalRequest.id} is
+              pending. All further decisions are blocked until an Approver
+              approves or vetoes it.
+            </div>
           ) : (
             <>
+              {transaction.amountMinor > HIGH_VALUE_THRESHOLD_MINOR ? (
+                <div className="workflow-note">
+                  APPROVE and REJECT create a pending maker-checker request for
+                  this high-value transaction. ESCALATE remains direct.
+                </div>
+              ) : null}
               <label htmlFor="decision-reason">Written reason</label>
               <textarea
                 id="decision-reason"
@@ -238,8 +263,9 @@ export function TransactionDetail({
               {actionLabels[selectedAction]} this transaction?
             </h2>
             <p>
-              This changes the transaction to a terminal state and creates an
-              audit event.
+              {requiresApproval
+                ? "This creates a pending approval request. The transaction remains FLAGGED until checker approval."
+                : "This changes the transaction to a terminal state and creates an audit event."}
             </p>
             <div className="reason-preview">
               <strong>Reason</strong>

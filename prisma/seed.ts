@@ -94,8 +94,8 @@ export function buildSeedData() {
     },
     {
       id: "USR-2026-0003",
-      name: "Avery Approver",
-      email: "avery.approver@example.test",
+      name: "Aaron Approver",
+      email: "aaron.approver@example.test",
       role: Role.APPROVER,
       createdAt: new Date("2026-01-05T09:10:00.000Z"),
     },
@@ -165,6 +165,7 @@ export async function seedDatabase(client: PrismaClient) {
 
   await client.$transaction([
     client.auditEvent.deleteMany(),
+    client.approvalRequest.deleteMany(),
     client.transaction.deleteMany(),
     client.customer.deleteMany(),
     client.user.deleteMany(),

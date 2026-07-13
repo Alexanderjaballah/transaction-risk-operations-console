@@ -51,11 +51,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     return NextResponse.json({
+      kind: result.kind,
       transaction: {
         id: result.transaction.id,
         status: result.transaction.status,
         updatedAt: result.transaction.updatedAt.toISOString(),
       },
+      ...(result.kind === "PENDING_APPROVAL"
+        ? {
+            approvalRequest: {
+              id: result.approvalRequest.id,
+              status: result.approvalRequest.status,
+              requestedAction: result.approvalRequest.requestedAction,
+              requestedTargetState:
+                result.approvalRequest.requestedTargetState,
+              createdAt: result.approvalRequest.createdAt.toISOString(),
+            },
+          }
+        : {}),
     });
   } catch {
     return internalErrorResponse();

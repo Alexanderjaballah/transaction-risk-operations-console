@@ -1,6 +1,9 @@
-import { TransactionStatus } from "@prisma/client";
+import { ApprovalAction, TransactionStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { getDecisionTarget } from "@/server/transactions/transitions";
+import {
+  getApprovalTarget,
+  getDecisionTarget,
+} from "@/server/transactions/transitions";
 
 describe("transaction transitions", () => {
   it.each([
@@ -19,5 +22,14 @@ describe("transaction transitions", () => {
     expect(getDecisionTarget(status, "APPROVE")).toBeNull();
     expect(getDecisionTarget(status, "REJECT")).toBeNull();
     expect(getDecisionTarget(status, "ESCALATE")).toBeNull();
+  });
+
+  it("derives approval targets from the typed requested action", () => {
+    expect(getApprovalTarget(ApprovalAction.APPROVE)).toBe(
+      TransactionStatus.APPROVED,
+    );
+    expect(getApprovalTarget(ApprovalAction.REJECT)).toBe(
+      TransactionStatus.REJECTED,
+    );
   });
 });

@@ -18,6 +18,18 @@ const transactionInclude = {
       accountStatus: true,
     },
   },
+  approvalRequests: {
+    where: { status: "PENDING" },
+    orderBy: { createdAt: "asc" },
+    take: 1,
+    select: {
+      id: true,
+      status: true,
+      requestedAction: true,
+      requestedTargetState: true,
+      createdAt: true,
+    },
+  },
 } satisfies Prisma.TransactionInclude;
 
 export async function listTransactions(query: TransactionQuery) {
@@ -68,10 +80,20 @@ export function serializeTransaction<
     customer: {
       accountLastFour: string;
     };
+    approvalRequests: Array<{
+      id: string;
+      status: string;
+      requestedAction: string;
+      requestedTargetState: TransactionStatus;
+      createdAt: Date;
+    }>;
   },
 >(transaction: T) {
+  const { approvalRequests, ...transactionFields } = transaction;
+  const pendingApprovalRequest = approvalRequests[0];
+
   return {
-    ...transaction,
+    ...transactionFields,
     customer: {
       ...transaction.customer,
       maskedAccountReference: `•••• ${transaction.customer.accountLastFour}`,
@@ -79,5 +101,11 @@ export function serializeTransaction<
     },
     createdAt: transaction.createdAt.toISOString(),
     updatedAt: transaction.updatedAt.toISOString(),
+    pendingApprovalRequest: pendingApprovalRequest
+      ? {
+          ...pendingApprovalRequest,
+          createdAt: pendingApprovalRequest.createdAt.toISOString(),
+        }
+      : null,
   };
 }
