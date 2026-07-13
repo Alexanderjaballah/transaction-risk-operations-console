@@ -34,8 +34,8 @@ export function AuditTrail() {
       <div className="page-heading">
         <div>
           <p className="eyebrow">Approver access</p>
-          <h1>Complete audit trail</h1>
-          <p>Append-only prototype audit trail.</p>
+          <h1>Recent audit events</h1>
+          <p>Newest 250 events from the append-only prototype audit trail.</p>
         </div>
       </div>
 

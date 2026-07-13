@@ -11,12 +11,12 @@ export type DecisionAction = z.infer<typeof decisionActionSchema>;
 
 export const decisionPayloadSchema = z.object({
   action: decisionActionSchema,
-  reason: z.string().max(1000).optional().default(""),
+  reason: z.string().optional().default(""),
 });
 
 export const approvalCompletionSchema = z.object({
   action: z.enum(["APPROVE", "VETO"]),
-  reason: z.string().max(1000).optional().default(""),
+  reason: z.string().optional().default(""),
 });
 
 export type ApprovalCompletionAction = z.infer<
@@ -31,13 +31,27 @@ export const transactionQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(25),
 });
 
-export function extractActionLabel(value: unknown): string {
+export const transactionIdSchema = z
+  .string()
+  .regex(/^TRX-2026-\d{6}$/);
+
+export const approvalIdSchema = z
+  .string()
+  .regex(
+    /^APR-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
+
+export function extractActionLabel(
+  value: unknown,
+  fallback = "DECISION_ATTEMPT",
+): string {
   if (typeof value !== "object" || value === null || !("action" in value)) {
-    return "DECISION_ATTEMPT";
+    return fallback;
   }
 
   const action = value.action;
-  return typeof action === "string" && action.length <= 64
+  return typeof action === "string" &&
+    /^[A-Z][A-Z0-9_]{0,63}$/.test(action)
     ? action
-    : "DECISION_ATTEMPT";
+    : fallback;
 }

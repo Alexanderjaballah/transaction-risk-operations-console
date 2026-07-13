@@ -6,6 +6,7 @@ import {
   findTransaction,
   serializeTransaction,
 } from "@/server/transactions/queries";
+import { transactionIdSchema } from "@/server/transactions/schemas";
 
 interface RouteContext {
   params: Promise<{
@@ -26,6 +27,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { transactionId } = await context.params;
+
+    if (!transactionIdSchema.safeParse(transactionId).success) {
+      return errorResponse(
+        400,
+        "TRANSACTION_ID_INVALID",
+        "The transaction identifier is invalid.",
+      );
+    }
+
     const transaction = await findTransaction(transactionId);
 
     if (!transaction) {

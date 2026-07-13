@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       return errorResponse(
         403,
         "AUDIT_FORBIDDEN",
-        "You are not authorized to view the complete audit trail.",
+        "You are not authorized to view audit events.",
       );
     }
 

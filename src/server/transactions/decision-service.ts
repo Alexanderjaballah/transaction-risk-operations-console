@@ -18,6 +18,7 @@ import {
   decisionPayloadSchema,
   extractActionLabel,
 } from "@/server/transactions/schemas";
+import { validateReason } from "@/server/transactions/reason";
 import { getDecisionTarget } from "@/server/transactions/transitions";
 
 interface DecisionFailure {
@@ -128,9 +129,9 @@ export async function executeDecision(
         };
       }
 
-      const reason = parsed.data.reason.trim();
+      const validatedReason = validateReason(parsed.data.reason);
 
-      if (!reason) {
+      if (!validatedReason.ok) {
         await createAuditEvent(
           {
             actor,
@@ -148,11 +149,18 @@ export async function executeDecision(
         return {
           ok: false,
           status: 422,
-          code: "DECISION_REASON_REQUIRED",
-          message: "A written reason is required.",
+          code:
+            validatedReason.kind === "required"
+              ? "DECISION_REASON_REQUIRED"
+              : "DECISION_REASON_INVALID",
+          message:
+            validatedReason.kind === "required"
+              ? "A written reason is required."
+              : "The written reason contains unsupported characters.",
         };
       }
 
+      const reason = validatedReason.value;
       const newStatus = getDecisionTarget(
         transaction.status,
         parsed.data.action,
@@ -316,6 +324,8 @@ export async function executeDecision(
       });
 
       if (parsed.success && transaction) {
+        const validatedReason = validateReason(parsed.data.reason);
+
         try {
           await createAuditEvent({
             actor,
@@ -324,7 +334,7 @@ export async function executeDecision(
             resourceId: activeRequest?.id ?? transactionId,
             previousState: transaction.status,
             newState: transaction.status,
-            reason: parsed.data.reason.trim() || null,
+            reason: validatedReason.ok ? validatedReason.value : null,
             outcome: AuditOutcome.DENIED,
           });
         } catch {

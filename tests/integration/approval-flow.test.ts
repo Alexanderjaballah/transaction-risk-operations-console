@@ -89,14 +89,21 @@ describe("maker-checker approval controls", () => {
     });
 
     const completionResponse = await completeApproval(
-      new NextRequest("http://localhost/api/approvals/unknown/complete", {
+      new NextRequest(
+        "http://localhost/api/approvals/APR-00000000-0000-4000-8000-000000000000/complete",
+        {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost",
+        },
         body: JSON.stringify({
           action: "APPROVE",
           reason: "No identity.",
         }),
-      }),
-      completionContext("unknown"),
+        },
+      ),
+      completionContext("APR-00000000-0000-4000-8000-000000000000"),
     );
     expect(completionResponse.status).toBe(401);
   });
@@ -381,7 +388,7 @@ describe("maker-checker approval controls", () => {
   });
 
   it("returns a safe not-found response and null-state denied audit", async () => {
-    const approvalId = "APR-UNKNOWN";
+    const approvalId = "APR-00000000-0000-4000-8000-000000000000";
     const response = await completeApproval(
       completionRequest(approverId, approvalId, {
         action: "APPROVE",

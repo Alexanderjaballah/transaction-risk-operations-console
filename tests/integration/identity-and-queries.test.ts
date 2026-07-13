@@ -12,7 +12,10 @@ describe("identity and transaction reads", () => {
     const response = await selectIdentity(
       new NextRequest("http://localhost/api/demo-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost",
+        },
         body: JSON.stringify({ userId: "USR-2026-0002" }),
       }),
     );
@@ -28,7 +31,10 @@ describe("identity and transaction reads", () => {
     const response = await selectIdentity(
       new NextRequest("http://localhost/api/demo-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost",
+        },
         body: JSON.stringify({ userId: "USR-UNKNOWN" }),
       }),
     );
