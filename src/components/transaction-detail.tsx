@@ -32,9 +32,11 @@ export function TransactionDetail({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const loadTransaction = useCallback(async () => {
+  const loadTransaction = useCallback(async (clearError = true) => {
     setIsLoading(true);
-    setError("");
+    if (clearError) {
+      setError("");
+    }
 
     const [transactionResponse, meResponse] = await Promise.all([
       fetch(`/api/transactions/${transactionId}`),
@@ -83,7 +85,7 @@ export function TransactionDetail({
       setError(await readErrorMessage(response));
       setSelectedAction(null);
       setIsSubmitting(false);
-      await loadTransaction();
+      await loadTransaction(false);
       return;
     }
 
