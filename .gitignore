@@ -22,6 +22,12 @@ lib-cov
 coverage
 *.lcov
 
+# Browser test artifacts
+playwright-report/
+test-results/
+screenshots/
+screencasts/
+
 # nyc test coverage
 .nyc_output
 
@@ -73,6 +79,10 @@ web_modules/
 # Local SQLite databases
 *.db
 *.db-journal
+
+# Generated Prisma client output
+prisma/generated/
+src/generated/prisma/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
