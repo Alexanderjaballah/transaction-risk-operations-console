@@ -15,6 +15,18 @@ interface QueueResponse {
   totalPages: number;
 }
 
+interface QueueQuery {
+  page: number;
+  risk: string;
+  search: string;
+  status: string;
+}
+
+type QueueLoadResult =
+  | { kind: "success"; data: QueueResponse }
+  | { kind: "error"; message: string }
+  | { kind: "aborted" };
+
 const initialData: QueueResponse = {
   transactions: [],
   total: 0,
@@ -22,6 +34,43 @@ const initialData: QueueResponse = {
   pageSize: 25,
   totalPages: 1,
 };
+
+export async function loadTransactions(
+  query: QueueQuery,
+  signal: AbortSignal,
+): Promise<QueueLoadResult> {
+  const params = new URLSearchParams({ page: String(query.page) });
+
+  if (query.search) params.set("search", query.search);
+  if (query.status) params.set("status", query.status);
+  if (query.risk) params.set("risk", query.risk);
+
+  try {
+    const response = await fetch(`/api/transactions?${params}`, { signal });
+
+    if (signal.aborted) {
+      return { kind: "aborted" };
+    }
+
+    if (!response.ok) {
+      return { kind: "error", message: await readErrorMessage(response) };
+    }
+
+    const data: QueueResponse = await response.json();
+    return signal.aborted
+      ? { kind: "aborted" }
+      : { kind: "success", data };
+  } catch (error) {
+    if (
+      signal.aborted ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      return { kind: "aborted" };
+    }
+
+    return { kind: "error", message: "Unable to load transactions." };
+  }
+}
 
 export function TransactionQueue() {
   const [data, setData] = useState(initialData);
@@ -36,31 +85,28 @@ export function TransactionQueue() {
   useEffect(() => {
     const controller = new AbortController();
 
-    async function loadTransactions() {
+    async function refreshTransactions() {
       setIsLoading(true);
       setError("");
-      const params = new URLSearchParams({ page: String(page) });
+      const result = await loadTransactions(
+        { page, risk, search, status },
+        controller.signal,
+      );
 
-      if (search) params.set("search", search);
-      if (status) params.set("status", status);
-      if (risk) params.set("risk", risk);
-
-      const response = await fetch(`/api/transactions?${params}`, {
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        setError(await readErrorMessage(response));
-        setIsLoading(false);
+      if (controller.signal.aborted || result.kind === "aborted") {
         return;
       }
 
-      const result: QueueResponse = await response.json();
-      setData(result);
+      if (result.kind === "error") {
+        setError(result.message);
+      } else {
+        setData(result.data);
+      }
+
       setIsLoading(false);
     }
 
-    void loadTransactions();
+    void refreshTransactions();
     return () => controller.abort();
   }, [page, risk, search, status]);
 
