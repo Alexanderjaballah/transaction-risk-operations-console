@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPPORT
+  OPERATIONS
+  APPROVER
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AccountStatus {
+  ACTIVE
+  RESTRICTED
+  CLOSED
+}
+
+enum TransactionStatus {
+  FLAGGED
+  APPROVED
+  REJECTED
+  ESCALATED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  DENIED
+  PENDING
+}
+
+model User {
+  id        String   @id
+  name      String
+  email     String   @unique
+  role      Role
+  createdAt DateTime @default(now())
+}
+
+model Customer {
+  id              String        @id
+  name            String
+  accountLastFour String
+  accountStatus   AccountStatus
+  riskLevel       RiskLevel
+  createdAt       DateTime      @default(now())
+  transactions    Transaction[]
+}
+
+model Transaction {
+  id            String            @id
+  customerId    String
+  customer      Customer          @relation(fields: [customerId], references: [id])
+  merchant      String
+  amountMinor   Int
+  currency      String
+  paymentMethod String
+  riskLevel     RiskLevel
+  flagReason    String
+  status        TransactionStatus @default(FLAGGED)
+  createdAt     DateTime
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status, riskLevel])
+  @@index([customerId])
+  @@index([merchant])
+}
+
+model AuditEvent {
+  id            String             @id
+  actorId       String
+  actorName     String
+  actorRole     Role
+  action        String
+  resourceType  String
+  resourceId    String
+  previousState TransactionStatus?
+  newState      TransactionStatus?
+  reason        String?
+  outcome       AuditOutcome
+  createdAt     DateTime           @default(now())
+
+  @@index([createdAt])
+  @@index([resourceType, resourceId])
+  @@index([actorId])
+}
