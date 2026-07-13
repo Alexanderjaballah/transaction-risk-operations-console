@@ -16,6 +16,7 @@ import {
   approvalCompletionSchema,
   extractActionLabel,
 } from "@/server/transactions/schemas";
+import { validateReason } from "@/server/transactions/reason";
 import { getApprovalTarget } from "@/server/transactions/transitions";
 
 type ApprovalClient = Prisma.TransactionClient;
@@ -180,7 +181,10 @@ export async function completeApproval(
   rawPayload: unknown,
 ): Promise<ApprovalCompletionResult> {
   const parsed = approvalCompletionSchema.safeParse(rawPayload);
-  const attemptedAction = extractActionLabel(rawPayload);
+  const attemptedAction = extractActionLabel(
+    rawPayload,
+    "APPROVAL_COMPLETION_ATTEMPT",
+  );
 
   if (!parsed.success) {
     await auditApprovalDenial(actor, approvalId, attemptedAction, null);
@@ -191,17 +195,22 @@ export async function completeApproval(
     );
   }
 
-  const reason = parsed.data.reason.trim();
+  const validatedReason = validateReason(parsed.data.reason);
 
-  if (!reason) {
+  if (!validatedReason.ok) {
     await auditApprovalDenial(actor, approvalId, parsed.data.action, null);
     return completionFailure(
       422,
-      "REVIEW_REASON_REQUIRED",
-      "A written review reason is required.",
+      validatedReason.kind === "required"
+        ? "REVIEW_REASON_REQUIRED"
+        : "REVIEW_REASON_INVALID",
+      validatedReason.kind === "required"
+        ? "A written review reason is required."
+        : "The review reason contains unsupported characters.",
     );
   }
 
+  const reason = validatedReason.value;
   const nextStatus =
     parsed.data.action === "APPROVE"
       ? ApprovalStatus.APPROVED

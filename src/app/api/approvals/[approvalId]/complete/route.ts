@@ -4,8 +4,10 @@ import {
   recordForbiddenApprovalCompletion,
 } from "@/server/approvals/approval-service";
 import { canCompleteApproval } from "@/server/authorization/policies";
+import { readMutationRequest } from "@/server/http/mutation-request";
 import { errorResponse, internalErrorResponse } from "@/server/http/responses";
 import { loadCurrentUser } from "@/server/identity/current-user";
+import { approvalIdSchema } from "@/server/transactions/schemas";
 
 interface RouteContext {
   params: Promise<{
@@ -15,6 +17,22 @@ interface RouteContext {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    const mutationRequest = await readMutationRequest(request);
+
+    if (!mutationRequest.ok) {
+      return mutationRequest.response;
+    }
+
+    const { approvalId } = await context.params;
+
+    if (!approvalIdSchema.safeParse(approvalId).success) {
+      return errorResponse(
+        400,
+        "APPROVAL_ID_INVALID",
+        "The approval identifier is invalid.",
+      );
+    }
+
     const user = await loadCurrentUser(request);
 
     if (!user) {
@@ -24,8 +42,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
         "Select a demo identity to continue.",
       );
     }
-
-    const { approvalId } = await context.params;
 
     if (!canCompleteApproval(user.role)) {
       const forbidden = await recordForbiddenApprovalCompletion(
@@ -39,15 +55,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    let rawPayload: unknown;
-
-    try {
-      rawPayload = await request.json();
-    } catch {
-      rawPayload = null;
-    }
-
-    const result = await completeApproval(user, approvalId, rawPayload);
+    const result = await completeApproval(
+      user,
+      approvalId,
+      mutationRequest.payload,
+    );
 
     if (!result.ok) {
       return errorResponse(result.status, result.code, result.message);

@@ -1,9 +1,10 @@
 # Fintech Transaction Review Console
 
 A focused proof of concept for reviewing suspicious synthetic financial
-transactions. The application demonstrates server-controlled demo identity,
-database-backed authorization, explicit transaction-state transitions,
-mandatory decision justification, and an append-only prototype audit trail.
+transactions. The application demonstrates a server-validated, unsigned demo
+identity selector, database-backed authorization, explicit transaction-state
+transitions, mandatory decision justification, and an append-only prototype
+audit trail.
 High-value Approve and Reject decisions use a maker-checker control so one
 Operations user requests the change and an Approver completes or vetoes it.
 
@@ -61,12 +62,17 @@ npm run db:seed          # reset deterministic synthetic data
 
 > **Demo identity switcher — real authentication is not implemented.**
 
+The identity mechanism is a server-validated, unsigned demo identity selector.
 Selecting a demo user calls the server, which validates the seeded identifier
 and sets an HttpOnly cookie. Every protected request reads that cookie and
 loads the current user and role from the database. Roles supplied in request
 JSON, query parameters, or headers do not grant permissions.
 
-| Role | View queue/detail | Direct decide | Create high-value request | View/complete pending approvals | View complete audit trail |
+Anyone with access to the prototype may select any seeded identity. This is
+not authentication and provides no real user accountability or session
+assurance.
+
+| Role | View queue/detail | Direct decide | Create high-value request | View/complete pending approvals | View recent audit events |
 |---|---:|---:|---:|---:|---:|
 | Support | Yes | No | No | No | No |
 | Operations | Yes | Yes, when eligible | Yes | No | No |
@@ -187,22 +193,48 @@ is opened.
 | Code | Meaning |
 |---|---|
 | `DECISION_FORBIDDEN` | Current server-loaded role cannot decide |
+| `ORIGIN_FORBIDDEN` | Mutation request has a missing, null, or mismatched origin |
+| `CONTENT_TYPE_UNSUPPORTED` | Mutation request does not use JSON |
+| `REQUEST_BODY_TOO_LARGE` | Mutation request exceeds 16 KiB |
+| `MALFORMED_JSON` | Mutation request body is not valid JSON |
+| `TRANSACTION_ID_INVALID` | Transaction identifier is not in the canonical format |
 | `TRANSACTION_NOT_FOUND` | Authorized decision references an unknown transaction |
 | `DECISION_INVALID_PAYLOAD` | Decision action or payload is invalid |
 | `DECISION_REASON_REQUIRED` | Operations reason is empty |
+| `DECISION_REASON_INVALID` | Operations reason has unsupported control or format characters |
 | `DECISION_INVALID_TRANSITION` | Transaction is terminal |
 | `APPROVAL_FORBIDDEN` | Current role cannot view or complete approvals |
+| `APPROVAL_ID_INVALID` | Approval identifier is not in the canonical format |
 | `SELF_APPROVAL_FORBIDDEN` | Current user ID equals persisted requester ID |
 | `APPROVAL_NOT_FOUND` | Approval request does not exist |
 | `APPROVAL_ALREADY_PENDING` | Transaction already has an active request |
 | `APPROVAL_ALREADY_COMPLETED` | Request is already approved or vetoed |
 | `APPROVAL_INVALID_PAYLOAD` | Completion action or payload is invalid |
 | `REVIEW_REASON_REQUIRED` | Checker reason is empty |
+| `REVIEW_REASON_INVALID` | Checker reason has unsupported control or format characters |
 | `TRANSACTION_STATE_CONFLICT` | Pending ownership or transaction state conflicts |
+
+## Mutation request boundary
+
+All state-changing routes require an `Origin` header that exactly matches the
+external application request origin and a JSON media type. `application/json`
+may include a charset parameter. Bodies are limited to 16 KiB using both an
+initial `Content-Length` check and streamed byte counting.
+
+Origin, media-type, body-size, malformed-JSON, and syntactically invalid-ID
+rejections happen before a valid business request exists and do not create
+business `AuditEvent` records. Domain-level authorization, payload, transition,
+and approval denials continue to be audited according to the scope below.
+
+Origin validation assumes a reverse proxy preserves the correct external host
+and protocol presented to Next.js. The application body limit does not replace
+network-layer rate limiting, connection limits, or other denial-of-service
+controls.
 
 ## Audit behavior
 
-The application uses an **Append-only prototype audit trail.**
+The application uses an **Append-only prototype audit trail.** The audit page
+displays the newest 250 events.
 
 Successful and denied decision attempts create events containing actor
 snapshots, action, resource, previous persisted state, resulting persisted
@@ -212,12 +244,14 @@ state, reason, outcome, and timestamp.
 - Denied decisions against an existing transaction record the same current
   state in `previousState` and `newState`.
 - Missing reasons are recorded as `null`.
-- Unknown transaction IDs create a denied event with null states and reason.
-- Denied complete-audit-trail access creates a denied event with a null reason.
+- Syntactically valid unknown transaction IDs create a denied event with null
+  states and reason.
+- Denied access to recent audit events creates a denied event with a null
+  reason.
 - Denied access to the privileged Pending Approvals area creates a `DENIED`
   audit event.
 - Successful Pending Approvals reads are not audited.
-- Successful complete-audit-trail reads are not audited.
+- Successful recent-audit-event reads are not audited.
 - Ordinary queue and detail reads are not audited in this prototype.
 
 Maker-checker request creation records `PENDING` with `FLAGGED → FLAGGED`.
@@ -225,8 +259,10 @@ Approval records `SUCCESS` with `FLAGGED → APPROVED` or
 `FLAGGED → REJECTED`. Veto records `SUCCESS` with `FLAGGED → FLAGGED`.
 Duplicate, forbidden, self-approval, repeated-completion, and state-conflict
 attempts record `DENIED` where the database remains available.
-This remains an append-only prototype audit trail, not a tamper-resistant or
-compliance-grade audit system.
+“Append-only prototype audit trail” applies only during normal application
+operation between explicit local resets. Reseeding deletes local audit events.
+The trail is not immutable, tamper-resistant, compliance-grade, or
+production-ready.
 
 ## Concurrency and atomicity
 
@@ -287,7 +323,7 @@ The test suite proves:
   and null-state audit.
 - Unauthorized decisions return the same safe 403 contract for existing and
   unknown IDs.
-- Support cannot access the complete audit trail.
+- Support cannot access recent audit events.
 - Denied audit access is audited; successful Approver reads are not.
 - Account values returned to the browser are masked.
 - Seed composition and deterministic reseeding satisfy the documented
@@ -315,5 +351,9 @@ The test suite proves:
   currency-aware thresholds or normalization into a common currency.
 - The audit trail is not described as immutable, tamper-resistant, compliant,
   or production ready.
+- Origin validation depends on correct external host and protocol preservation
+  by the production reverse proxy.
+- The 16 KiB application body limit does not replace network-layer rate
+  limiting, request limits, or denial-of-service controls.
 - Real payment execution, bank integrations, notifications, multi-level
   approvals, production monitoring, and compliance certification are deferred.

@@ -59,14 +59,20 @@ describe("read and validation routes", () => {
     const invalidPayload = await selectIdentity(
       new NextRequest("http://localhost/api/demo-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost",
+        },
         body: JSON.stringify({ userId: "" }),
       }),
     );
     const malformedJson = await selectIdentity(
       new NextRequest("http://localhost/api/demo-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost",
+        },
         body: "{",
       }),
     );
@@ -104,7 +110,10 @@ describe("read and validation routes", () => {
         "http://localhost/api/transactions/TRX-2026-000041/decision",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Origin: "http://localhost",
+          },
           body: JSON.stringify({
             action: "APPROVE",
             reason: "No identity supplied.",

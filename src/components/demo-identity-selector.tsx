@@ -56,7 +56,8 @@ export function DemoIdentitySelector() {
           Demo identity
         </p>
         <p className="identity-warning">
-          Demo identity switcher — real authentication is not implemented.
+          Unsigned, server-validated demo identity selector. Anyone with access
+          can choose any seeded identity; this is not authentication.
         </p>
       </div>
       <div className="identity-control">

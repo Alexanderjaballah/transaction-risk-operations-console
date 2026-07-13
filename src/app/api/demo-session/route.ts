@@ -9,6 +9,7 @@ import {
   errorResponse,
   internalErrorResponse,
 } from "@/server/http/responses";
+import { readMutationRequest } from "@/server/http/mutation-request";
 
 export async function GET() {
   try {
@@ -21,8 +22,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const rawPayload: unknown = await request.json();
-    const parsed = demoSessionSchema.safeParse(rawPayload);
+    const mutationRequest = await readMutationRequest(request);
+
+    if (!mutationRequest.ok) {
+      return mutationRequest.response;
+    }
+
+    const parsed = demoSessionSchema.safeParse(mutationRequest.payload);
 
     if (!parsed.success) {
       return errorResponse(

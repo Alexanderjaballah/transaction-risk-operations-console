@@ -7,6 +7,17 @@ export function requestWithIdentity(
 ) {
   const headers = new Headers(init?.headers);
   headers.set("cookie", `transaction_console_demo_user=${userId}`);
+  const method = init?.method?.toUpperCase();
+
+  if (
+    method &&
+    method !== "GET" &&
+    method !== "HEAD" &&
+    !headers.has("origin")
+  ) {
+    headers.set("origin", new URL(url).origin);
+  }
+
   const { signal, ...requestInit } = init ?? {};
 
   return new NextRequest(url, {

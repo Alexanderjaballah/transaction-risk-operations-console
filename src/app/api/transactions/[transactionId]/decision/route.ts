@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { canDecide } from "@/server/authorization/policies";
+import { readMutationRequest } from "@/server/http/mutation-request";
 import { errorResponse, internalErrorResponse } from "@/server/http/responses";
 import { loadCurrentUser } from "@/server/identity/current-user";
 import {
   executeDecision,
   recordForbiddenDecision,
 } from "@/server/transactions/decision-service";
+import { transactionIdSchema } from "@/server/transactions/schemas";
 
 interface RouteContext {
   params: Promise<{
@@ -15,6 +17,22 @@ interface RouteContext {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    const mutationRequest = await readMutationRequest(request);
+
+    if (!mutationRequest.ok) {
+      return mutationRequest.response;
+    }
+
+    const { transactionId } = await context.params;
+
+    if (!transactionIdSchema.safeParse(transactionId).success) {
+      return errorResponse(
+        400,
+        "TRANSACTION_ID_INVALID",
+        "The transaction identifier is invalid.",
+      );
+    }
+
     const user = await loadCurrentUser(request);
 
     if (!user) {
@@ -25,8 +43,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const { transactionId } = await context.params;
-
     if (!canDecide(user.role)) {
       const forbidden = await recordForbiddenDecision(user, transactionId);
       return errorResponse(
@@ -36,15 +52,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    let rawPayload: unknown;
-
-    try {
-      rawPayload = await request.json();
-    } catch {
-      rawPayload = null;
-    }
-
-    const result = await executeDecision(user, transactionId, rawPayload);
+    const result = await executeDecision(
+      user,
+      transactionId,
+      mutationRequest.payload,
+    );
 
     if (!result.ok) {
       return errorResponse(result.status, result.code, result.message);
