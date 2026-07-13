@@ -214,7 +214,10 @@ state, reason, outcome, and timestamp.
 - Missing reasons are recorded as `null`.
 - Unknown transaction IDs create a denied event with null states and reason.
 - Denied complete-audit-trail access creates a denied event with a null reason.
-- Successful audit reads do not recursively create audit events.
+- Denied access to the privileged Pending Approvals area creates a `DENIED`
+  audit event.
+- Successful Pending Approvals reads are not audited.
+- Successful complete-audit-trail reads are not audited.
 - Ordinary queue and detail reads are not audited in this prototype.
 
 Maker-checker request creation records `PENDING` with `FLAGGED → FLAGGED`.
@@ -222,6 +225,8 @@ Approval records `SUCCESS` with `FLAGGED → APPROVED` or
 `FLAGGED → REJECTED`. Veto records `SUCCESS` with `FLAGGED → FLAGGED`.
 Duplicate, forbidden, self-approval, repeated-completion, and state-conflict
 attempts record `DENIED` where the database remains available.
+This remains an append-only prototype audit trail, not a tamper-resistant or
+compliance-grade audit system.
 
 ## Concurrency and atomicity
 
