@@ -19,10 +19,6 @@ export const approvalCompletionSchema = z.object({
   reason: z.string().optional().default(""),
 });
 
-export type ApprovalCompletionAction = z.infer<
-  typeof approvalCompletionSchema
->["action"];
-
 export const transactionQuerySchema = z.object({
   search: z.string().trim().max(100).optional().default(""),
   status: z.nativeEnum(TransactionStatus).optional(),
