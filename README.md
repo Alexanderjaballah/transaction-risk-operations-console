@@ -128,13 +128,13 @@ High-value Approve and Reject decisions require a separate checker when
 
 ## Validation
 
-Final validation on the documentation branch:
+Validation on `main` as of 2026-11-18:
 
 - Lint: passed
 - Type check: passed
-- Tests: **98/98 passed across 13 files**
+- Tests: **101/101 passed across 14 files**
 - Coverage: **89.95% statements / 89.18% branches / 97.67% functions / 89.95% lines**
-- `npm audit --audit-level=low`: **0 vulnerabilities**
+- `npm audit --audit-level=low`: **32 vulnerabilities (3 critical, 20 high, 9 moderate)**
 - Production build: passed
 
 ## Security boundaries
