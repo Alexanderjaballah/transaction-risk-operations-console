@@ -1,7 +1,7 @@
 import { RiskLevel, TransactionStatus } from "@prisma/client";
 import { z } from "zod";
 
-export const decisionActionSchema = z.enum([
+const decisionActionSchema = z.enum([
   "APPROVE",
   "REJECT",
   "ESCALATE",
